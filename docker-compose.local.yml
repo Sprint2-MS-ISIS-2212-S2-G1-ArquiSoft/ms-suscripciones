@@ -1,0 +1,121 @@
+# Solo para desarrollo local. El despliegue real (EKS / EC2) vive en los
+# manifiestos de infraestructura del experimento.
+services:
+  suscripciones:
+    build: .
+    container_name: suscripciones
+    restart: unless-stopped
+    environment:
+      NODE_ENV: development
+      PORT: 3000
+      SUSCRIPCIONES_NAME: suscripciones
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: suscripciones
+      DB_PASSWORD: suscripciones
+      DB_NAME: suscripciones
+      DB_LOGGING: "false"
+      DB_SYNCHRONIZE: "true"
+      EMISION_URL: http://emision-mock:3000
+      TERCEROS_URL: http://terceros-mock:3000
+      PAGOS_HABILITADO: "${PAGOS_HABILITADO:-true}"
+      RESILIENCIA_HABILITADA: "${RESILIENCIA_HABILITADA:-true}"
+      EMISION_TIMEOUT_MS: "${EMISION_TIMEOUT_MS:-1500}"
+      BULKHEAD_CONEXIONES: "${BULKHEAD_CONEXIONES:-20}"
+      BULKHEAD_CONCURRENCIA: "${BULKHEAD_CONCURRENCIA:-30}"
+      EMISION_REINTENTOS: "${EMISION_REINTENTOS:-1}"
+    ports:
+      - "3002:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      emision-mock:
+        condition: service_started
+      terceros-mock:
+        condition: service_started
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: suscripciones-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: suscripciones
+      POSTGRES_USER: suscripciones
+      POSTGRES_PASSWORD: suscripciones
+    ports:
+      - "5436:5432"
+    volumes:
+      - suscripciones_postgres_data:/var/lib/postgresql/data
+      - ./database/init.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U suscripciones -d suscripciones"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  terceros-mock:
+    image: node:20-alpine
+    container_name: suscripciones-terceros-mock
+    restart: unless-stopped
+    command:
+      - node
+      - -e
+      - |
+        require('http')
+          .createServer((req, res) => {
+            res.setHeader('Content-Type', 'application/json');
+            if (req.method === 'POST' && req.url === '/pagos/cobros') {
+              req.on('data', () => {});
+              req.on('end', () => res.end(JSON.stringify({ exitoso: true })));
+              return;
+            }
+            res.statusCode = 404;
+            res.end(JSON.stringify({ statusCode: 404, message: 'Not Found' }));
+          })
+          .listen(3000);
+    ports:
+      - "3007:3000"
+
+  emision-mock:
+    image: node:20-alpine
+    container_name: suscripciones-emision-mock
+    restart: unless-stopped
+    command:
+      - node
+      - -e
+      - |
+        const crypto = require('node:crypto');
+        require('http')
+          .createServer((req, res) => {
+            res.setHeader('Content-Type', 'application/json');
+            if (req.method === 'POST' && req.url === '/polizas') {
+              let raw = '';
+              req.on('data', (c) => { raw += c; });
+              req.on('end', () => {
+                const body = raw ? JSON.parse(raw) : {};
+                const inicio = new Date();
+                const fin = new Date(inicio);
+                fin.setFullYear(fin.getFullYear() + 1);
+                res.statusCode = 201;
+                res.end(JSON.stringify({
+                  id: crypto.randomUUID(),
+                  numeroPoliza: 'POL-' + String(Math.floor(Math.random() * 100000000)).padStart(8, '0'),
+                  estado: 'ACTIVA',
+                  fechaInicioVigencia: inicio.toISOString(),
+                  fechaFinVigencia: fin.toISOString(),
+                  clienteId: body.clienteId ?? null,
+                  cotizacionId: body.cotizacionId ?? null,
+                  suscripcionId: body.suscripcionId ?? null,
+                }));
+              });
+              return;
+            }
+            res.statusCode = 404;
+            res.end(JSON.stringify({ statusCode: 404, message: 'Not Found' }));
+          })
+          .listen(3000);
+    ports:
+      - "3008:3000"
+
+volumes:
+  suscripciones_postgres_data:

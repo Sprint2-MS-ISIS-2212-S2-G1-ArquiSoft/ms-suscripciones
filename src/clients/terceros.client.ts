@@ -42,10 +42,8 @@ export class TercerosClient implements OnModuleDestroy {
 
     const baseUrl = this.config.get<string>('TERCEROS_URL');
     if (!baseUrl) {
-      this.logger.warn(
-        'TERCEROS_URL no configurado; cobro omitido en modo aislado',
-      );
-      return true;
+      this.logger.error('Falta la variable de entorno TERCEROS_URL');
+      throw new ServiceUnavailableException('Servicio de pagos no disponible');
     }
 
     const headers: Record<string, string> = {

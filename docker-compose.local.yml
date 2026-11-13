@@ -43,7 +43,7 @@ services:
       POSTGRES_USER: suscripciones
       POSTGRES_PASSWORD: suscripciones
     ports:
-      - "5436:5432"
+      - "5439:5432"
     volumes:
       - suscripciones_postgres_data:/var/lib/postgresql/data
       - ./database/init.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
@@ -65,8 +65,13 @@ services:
           .createServer((req, res) => {
             res.setHeader('Content-Type', 'application/json');
             if (req.method === 'POST' && req.url === '/pagos/cobros') {
-              req.on('data', () => {});
-              req.on('end', () => res.end(JSON.stringify({ exitoso: true })));
+              let raw = '';
+              req.on('data', (c) => { raw += c; });
+              req.on('end', () => {
+                const body = raw ? JSON.parse(raw) : {};
+                const documento = String(body.documento ?? '');
+                res.end(JSON.stringify({ exitoso: !documento.startsWith('000') }));
+              });
               return;
             }
             res.statusCode = 404;
@@ -74,7 +79,7 @@ services:
           })
           .listen(3000);
     ports:
-      - "3007:3000"
+      - "3017:3000"
 
   emision-mock:
     image: node:20-alpine
@@ -115,7 +120,7 @@ services:
           })
           .listen(3000);
     ports:
-      - "3008:3000"
+      - "3018:3000"
 
 volumes:
   suscripciones_postgres_data:

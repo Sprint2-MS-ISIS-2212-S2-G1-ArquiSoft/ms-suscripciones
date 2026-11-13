@@ -46,17 +46,6 @@ export class SuscripcionesService {
   ): Promise<RespuestaSuscripcion> {
     this.totalPeticiones++;
 
-    if (dto.documento.startsWith('000')) {
-      throw new HttpException(
-        {
-          message: 'El pago fue rechazado',
-          error: 'Payment Required',
-          statusCode: HttpStatus.PAYMENT_REQUIRED,
-        },
-        HttpStatus.PAYMENT_REQUIRED,
-      );
-    }
-
     const suma = parseFloat(dto.sumaAsegurada);
     const puntajeRiesgo = suma > 1_000_000 ? 80 : suma > 500_000 ? 50 : 20;
 

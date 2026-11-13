@@ -16,7 +16,7 @@ import { SuscripcionesModule } from './suscripciones/suscripciones.module';
       useFactory: (config: ConfigService) => ({
         type: 'postgres',
         host: config.get<string>('DB_HOST', 'localhost'),
-        port: Number(config.get<string>('DB_PORT', '5436')),
+        port: Number(config.get<string>('DB_PORT', '5439')),
         username: config.get<string>('DB_USER', 'suscripciones'),
         password: config.get<string>('DB_PASSWORD', 'suscripciones'),
         database: config.get<string>('DB_NAME', 'suscripciones'),
